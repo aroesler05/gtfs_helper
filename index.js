@@ -1,50 +1,36 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 import fetch from "node-fetch";
 import express from 'express';
-
 const app = express();
+
 const api_key = process.env.API_KEY;
-const TARGET_ROUTES = ['6614', '6616'];
 
 app.use(express.json());
 
 app.get('/', async (req, res) => {
+
   try {
     const response = await fetch(`https://gtfsapi.translink.ca/v3/gtfsposition?apikey=${api_key}`);
-    
     if (!response.ok) {
       const error = new Error(`${response.url}: ${response.status} ${response.statusText}`);
       error.response = response;
       throw error;
     }
-    
     const buffer = await response.arrayBuffer();
     const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(buffer));
-    
     let entities = [];
     feed.entity.forEach((entity) => {
-      // Filter for route IDs 6614 and 6616
-      if (entity.vehicle && entity.vehicle.trip && entity.vehicle.trip.routeId) {
-        const routeId = entity.vehicle.trip.routeId;
-        if (TARGET_ROUTES.includes(routeId)) {
-          entities.push(entity.toJSON());
-        }
+      const data = entity.toJSON();
+      if (!req.query.routeId || req.query.routeId === data.vehicle.trip.routeId) {
+        entities.push(data);
       }
     });
-    
-    res.json({
-      status: "success",
-      count: entities.length,
-      routes: TARGET_ROUTES,
-      entities: entities
-    });
-    
+
+    res.json(entities);
   } catch (error) {
-    res.status(500).json({
-      status: "error",
-      error: error.message
-    });
+    res.json({"status":"error","error":error});
   }
+  
 });
 
 const PORT = process.env.PORT || 3000;
